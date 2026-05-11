@@ -2,163 +2,42 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WildLink HK - 智能野生動物救援</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <style>
-        :root {
-            --primary-color: #2e7d32;
-            --primary-dark: #1b5e20;
-            --secondary-color: #f1f8e9;
-            --accent-color: #ff5252;
-            --text-main: #2c3e50;
-            --text-sub: #7f8c8d;
-            --bg-color: #f8f9fa;
-        }
-
-        body { 
-            font-family: 'PingFang HK', 'Helvetica Neue', Helvetica, Arial, sans-serif; 
-            margin: 0; 
-            background: var(--bg-color); 
-            color: var(--text-main);
-            overflow-x: hidden;
-        }
-
-        /* 頂部導航欄 */
-        #header { 
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); 
-            color: white; 
-            padding: 20px 15px; 
-            text-align: center; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border-radius: 0 0 20px 20px;
-        }
-
-        #header h2 { margin: 0; font-size: 24px; letter-spacing: 1px; }
-        #header small { opacity: 0.8; font-weight: 300; font-size: 12px; text-transform: uppercase; }
-
-        /* 視覺顯示區域 */
-        #display-container { 
-            position: relative; 
-            width: 92%; 
-            max-width: 600px; 
-            margin: 20px auto; 
-            background: #1a1a1a; 
-            border-radius: 18px; 
-            overflow: hidden; 
-            aspect-ratio: 4 / 3;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-        }
-
-        video, #user-image { width: 100%; height: 100%; object-fit: cover; display: block; }
-        #user-image { display: none; } 
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-
-        /* 載入動畫 */
-        .loading-overlay { 
-            position: absolute; 
-            background: rgba(0,0,0,0.7); 
-            color: white; 
-            padding: 15px 25px; 
-            border-radius: 50px; 
-            font-size: 14px;
-            backdrop-filter: blur(5px);
-            z-index: 10; 
-        }
-
-        /* 控制面板 */
-        #control-panel { max-width: 600px; margin: auto; padding: 0 20px 30px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f4f7f6; color: #333; }
+        #header { background: #2e7d32; color: white; padding: 15px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         
-        .upload-section { display: flex; gap: 12px; margin: -10px auto 20px; position: relative; z-index: 5; }
+        #display-container { position: relative; width: 100%; max-width: 600px; margin: 10px auto; background: #000; border-radius: 12px; overflow: hidden; min-height: 300px; display: flex; align-items: center; justify-content: center; }
+        video, #user-image { width: 100%; height: auto; display: block; }
+        #user-image { display: none; } /* 預設隱藏上傳的圖片 */
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        #control-panel { max-width: 600px; margin: auto; padding: 15px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }
         
-        .btn { 
-            flex: 1; 
-            padding: 14px; 
-            border: none; 
-            border-radius: 12px; 
-            font-size: 15px; 
-            cursor: pointer; 
-            font-weight: 600; 
-            transition: all 0.2s ease; 
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .btn-upload { background: white; color: var(--primary-color); }
-        .btn-camera { background: var(--primary-color); color: white; }
-        .btn:active { transform: scale(0.96); }
-
-        /* 資訊卡片 */
-        .card { 
-            background: white; 
-            padding: 24px; 
-            border-radius: 20px; 
-            box-shadow: 0 8px 20px rgba(0,0,0,0.05); 
-            border: 1px solid rgba(0,0,0,0.03);
-            text-align: left;
-        }
-
-        #species-label { 
-            font-size: 22px; 
-            font-weight: 800; 
-            color: var(--primary-dark); 
-            margin-bottom: 12px; 
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        #species-label::before {
-            content: '🔍';
-            font-size: 18px;
-        }
-
-        #guide-text { 
-            font-size: 15px; 
-            line-height: 1.6; 
-            color: var(--text-main); 
-            background: var(--secondary-color);
-            padding: 15px;
-            border-radius: 12px;
-            border-left: 4px solid var(--primary-color);
-        }
-
-        /* 舉報按鈕 */
-        .btn-report { 
-            background: var(--accent-color); 
-            color: white; 
-            width: 100%; 
-            margin-top: 20px; 
-            display: none; 
-            font-size: 18px; 
-            padding: 16px;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(255, 82, 82, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); }
-        }
-
+        .upload-section { display: flex; gap: 10px; margin-bottom: 15px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: 600; transition: 0.3s; text-align: center; }
+        .btn-upload { background: #e8f5e9; color: #2e7d32; border: 1px dashed #2e7d32; }
+        .btn-camera { background: #2e7d32; color: white; }
+        .btn-report { background: #d32f2f; color: white; width: 100%; margin-top: 15px; display: none; font-size: 18px; }
+        
+        #species-label { font-size: 20px; font-weight: bold; color: #1b5e20; margin-bottom: 8px; }
+        #guide-text { font-size: 15px; line-height: 1.5; color: #555; }
+        .loading-overlay { position: absolute; color: white; font-style: italic; z-index: 10; }
     </style>
 </head>
 <body>
 
 <div id="header">
-    <h2>WildLink HK</h2>
-    <small>AI 野生動物保護系統</small>
+    <h2 style="margin:0;">WildLink HK 野境通</h2>
+    <small>AI 實時物種辨識與救援系統</small>
 </div>
 
 <div id="display-container">
-    <div id="loader" class="loading-overlay">正在啟動 AI 引擎...</div>
+    <div id="loader" class="loading-overlay">模型加載中...</div>
     <video id="webcam" autoplay playsinline muted></video>
     <img id="user-image" src="" alt="uploaded image" />
     <canvas id="overlay"></canvas>
@@ -170,12 +49,12 @@
             📁 上傳相片
             <input type="file" id="file-input" accept="image/*" style="display:none;">
         </label>
-        <button class="btn btn-camera" onclick="switchMode('webcam')">📷 鏡頭掃描</button>
+        <button class="btn btn-camera" onclick="switchMode('webcam')">📷 實時鏡頭</button>
     </div>
 
     <div class="card">
-        <div id="species-label">掃描中...</div>
-        <div id="guide-text">請將鏡頭對準野生動物，或選擇相片進行識別。系統將提供即時應急指引。</div>
+        <div id="species-label">等待分析...</div>
+        <div id="guide-text">請將鏡頭對準野生動物，或從相冊中選擇一張清楚的照片。</div>
         <button id="report-btn" class="btn btn-report" onclick="makeCall()">🚨 緊急舉報 (18222)</button>
     </div>
 </div>
@@ -194,31 +73,30 @@
     let isWebcamMode = true;
 
     const hkSpecies = {
-        'pig': { zh: '野豬 (Wild Boar)', info: '危險提示：成年野豬具攻擊性。請與牠保持距離，緩慢退後，切勿奔跑、驚嚇或餵食野豬。' },
-        'bird': { zh: '受傷禽鳥 / 黑耳鳶', info: '指引：如發現鳥類無法飛行，請聯絡愛護動物協會。請勿強行抓捕，可用透氣箱子暫時蓋住以減少其驚恐。' },
-        'cow': { zh: '黃牛 / 水牛', info: '指引：牛隻通常溫和，但請勿餵食以免其走近馬路。若牛隻受傷或誤入公路，請立即舉報。' },
-        'dog': { zh: '流浪犬隻', info: '指引：觀察是否有頸圈。如犬隻表現受傷或具攻擊性，請保持距離並聯絡相關部門。' },
-        'cat': { zh: '流浪貓', info: '指引：若發現受傷或受困，請留意其位置，切勿冒險徒手救援以免被抓傷。' },
-        'monkey': { zh: '獼猴 (Monkey)', info: '警告：切勿展示食物或塑膠袋。避免與其眼神對視，這會被視為挑釁行為。請緩慢移開。' },
-        'horse': { zh: '馬匹', info: '指引：香港較少見，請勿大聲喧嘩。請保持安靜並從側方繞行，避免觸發其受驚。' }
+    'pig': { zh: '野豬', info: '危險提示：成年野豬具攻擊性。請緩慢退後，切勿奔跑。' },
+    'bird': { zh: '受傷禽鳥', info: '指引：如發現鳥類無法飛行，請聯絡愛護動物協會，切勿強行抓捕。' },
+    'cow': { zh: '黃牛 / 水牛', info: '指引：請勿在路邊餵食。若牛隻受傷或闖入快速公路，請報警。' },
+    'dog': { zh: '流浪犬隻', info: '指引：觀察是否有頸圈或晶片，如受傷請聯繫 SPCA。' },
+    'cat': { zh: '流浪貓', info: '指引：若發現受傷或被困，請保持距離並觀察其行為。' },
+    'monkey': { zh: '獼猴', info: '警告：切勿展示任何食物或膠袋。保持眼神接觸可能被視為挑釁。' },
+    'horse': { zh: '馬匹', info: '指引：香港較少見，多為退役或受訓馬匹。請保持安靜，避免驚嚇。' },
+    'sheep': { zh: '綿羊 / 山羊', info: '指引：多出現在偏遠鄉郊農場，請勿隨意餵食。' }
     };
 
+    // 1. 初始化
     async function init() {
-        try {
-            model = await cocoSsd.load();
-            loader.style.display = 'none';
-            startWebcam();
-        } catch (e) {
-            loader.innerText = "模型加載失敗，請檢查網路。";
-        }
+        model = await cocoSsd.load();
+        loader.style.display = 'none';
+        startWebcam();
     }
 
+    // 2. 切換模式 (鏡頭 vs 上傳)
     function switchMode(mode) {
         if (mode === 'webcam') {
             isWebcamMode = true;
             userImg.style.display = 'none';
             video.style.display = 'block';
-            label.innerText = "鏡頭辨識中...";
+            label.innerText = "切換至鏡頭掃描...";
             detectWebcam();
         } else {
             isWebcamMode = false;
@@ -227,29 +105,29 @@
         }
     }
 
+    // 3. 處理圖片上傳
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
+
         const reader = new FileReader();
         reader.onload = (f) => {
             userImg.src = f.target.result;
             switchMode('upload');
+            // 圖片加載完成後進行分析
             userImg.onload = () => detectImage(userImg);
         };
         reader.readAsDataURL(file);
     });
 
+    // 4. 攝像頭啟動
     async function startWebcam() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            video.srcObject = stream;
-            video.onloadedmetadata = () => detectWebcam();
-        } catch (e) {
-            label.innerText = "無法開啟鏡頭";
-            guide.innerText = "請確保已授權相機權限，或改用圖片上傳功能。";
-        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => detectWebcam();
     }
 
+    // 5. 實時檢測
     async function detectWebcam() {
         if (!isWebcamMode) return;
         const predictions = await model.detect(video);
@@ -257,38 +135,32 @@
         requestAnimationFrame(detectWebcam);
     }
 
+    // 6. 靜態圖片檢測
     async function detectImage(imgElement) {
         const predictions = await model.detect(imgElement);
         processResults(predictions, imgElement);
     }
 
+    // 7. 通用結果處理
     function processResults(predictions, source) {
         const ctx = canvas.getContext('2d');
-        const displayWidth = source.clientWidth;
-        const displayHeight = source.clientHeight;
-        canvas.width = displayWidth;
-        canvas.height = displayHeight;
+        canvas.width = source.clientWidth || source.videoWidth;
+        canvas.height = source.clientHeight || source.videoHeight;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         let match = false;
         predictions.forEach(p => {
-            if (hkSpecies[p.class] && p.score > 0.5) {
+            if (hkSpecies[p.class]) {
                 match = true;
                 const species = hkSpecies[p.class];
                 
-                // 畫框與美化特效
+                // 畫框
                 const [x, y, w, h] = p.bbox;
-                const scaleX = displayWidth / (source.videoWidth || source.naturalWidth);
-                const scaleY = displayHeight / (source.videoHeight || source.naturalHeight);
+                ctx.strokeStyle = "#00FF00";
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x, y, w, h);
 
-                ctx.strokeStyle = "#4caf50";
-                ctx.lineWidth = 6;
-                ctx.strokeRect(x * scaleX, y * scaleY, w * scaleX, h * scaleY);
-                
-                // 加一個發光的角落
-                ctx.fillStyle = "rgba(76, 175, 80, 0.2)";
-                ctx.fillRect(x * scaleX, y * scaleY, w * scaleX, h * scaleY);
-
+                // 更新文字
                 label.innerText = `識別結果：${species.zh}`;
                 guide.innerText = species.info;
                 reportBtn.style.display = 'block';
@@ -296,14 +168,14 @@
         });
 
         if (!match && !isWebcamMode) {
-            label.innerText = "未發現已知物種";
-            guide.innerText = "請嘗試從不同角度拍攝，或確保動物在畫面中央。";
+            label.innerText = "未識別到指定物種";
+            guide.innerText = "請嘗試上傳更清晰、包含野豬、牛或鳥類的圖片。";
             reportBtn.style.display = 'none';
         }
     }
 
     function makeCall() {
-        if (confirm("確認接通 18222 政府專線進行舉報？系統建議在安全位置撥打。")) {
+        if (confirm("是否立即接通漁農署/18222專線？")) {
             window.location.href = "tel:18222";
         }
     }
