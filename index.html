@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WildLink HK - 智能野生動物救援</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f4f7f6; color: #333; }
+        #header { background: #2e7d32; color: white; padding: 15px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        #display-container { position: relative; width: 100%; max-width: 600px; margin: 10px auto; background: #000; border-radius: 12px; overflow: hidden; min-height: 300px; display: flex; align-items: center; justify-content: center; }
+        video, #user-image { width: 100%; height: auto; display: block; }
+        #user-image { display: none; } /* 預設隱藏上傳的圖片 */
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        #control-panel { max-width: 600px; margin: auto; padding: 15px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        
+        .upload-section { display: flex; gap: 10px; margin-bottom: 15px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: 600; transition: 0.3s; text-align: center; }
+        .btn-upload { background: #e8f5e9; color: #2e7d32; border: 1px dashed #2e7d32; }
+        .btn-camera { background: #2e7d32; color: white; }
+        .btn-report { background: #d32f2f; color: white; width: 100%; margin-top: 15px; display: none; font-size: 18px; }
+        
+        #species-label { font-size: 20px; font-weight: bold; color: #1b5e20; margin-bottom: 8px; }
+        #guide-text { font-size: 15px; line-height: 1.5; color: #555; }
+        .loading-overlay { position: absolute; color: white; font-style: italic; z-index: 10; }
+    </style>
+</head>
+<body>
+
+<div id="header">
+    <h2 style="margin:0;">WildLink HK 野境通</h2>
+    <small>AI 實時物種辨識與救援系統</small>
+</div>
+
+<div id="display-container">
+    <div id="loader" class="loading-overlay">模型加載中...</div>
+    <video id="webcam" autoplay playsinline muted></video>
+    <img id="user-image" src="" alt="uploaded image" />
+    <canvas id="overlay"></canvas>
+</div>
+
+<div id="control-panel">
+    <div class="upload-section">
+        <label class="btn btn-upload">
+            📁 上傳相片
+            <input type="file" id="file-input" accept="image/*" style="display:none;">
+        </label>
+        <button class="btn btn-camera" onclick="switchMode('webcam')">📷 實時鏡頭</button>
+    </div>
+
+    <div class="card">
+        <div id="species-label">等待分析...</div>
+        <div id="guide-text">請將鏡頭對準野生動物，或從相冊中選擇一張清楚的照片。</div>
+        <button id="report-btn" class="btn btn-report" onclick="makeCall()">🚨 緊急舉報 (18222)</button>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('webcam');
+    const userImg = document.getElementById('user-image');
+    const fileInput = document.getElementById('file-input');
+    const canvas = document.getElementById('overlay');
+    const label = document.getElementById('species-label');
+    const guide = document.getElementById('guide-text');
+    const reportBtn = document.getElementById('report-btn');
+    const loader = document.getElementById('loader');
+
+    let model;
+    let isWebcamMode = true;
+
+    const hkSpecies = {
+        'pig': { zh: '野豬 (Wild Boar)', info: '危險提示：這可能是具攻擊性的成年野豬。請背對牆壁緩慢離開，切勿奔跑或挑釁。' },
+        'bird': { zh: ' 受傷禽鳥', info: '指引：如發現鳥類無法飛行，請勿自行捕捉。請嘗試用透氣紙盒將其暫時覆蓋。' },
+        'cow': { zh: '黃牛 / 水牛', info: '指引：牛隻通常性格溫順，但請勿在路邊餵食，以免將牠們引向馬路造成意外。' },
+        'dog': { zh: '流浪犬隻', info: '指引：請留意其頸圈，觀察是否有傷口或營養不良。' }
+    };
+
+    // 1. 初始化
+    async function init() {
+        model = await cocoSsd.load();
+        loader.style.display = 'none';
+        startWebcam();
+    }
+
+    // 2. 切換模式 (鏡頭 vs 上傳)
+    function switchMode(mode) {
+        if (mode === 'webcam') {
+            isWebcamMode = true;
+            userImg.style.display = 'none';
+            video.style.display = 'block';
+            label.innerText = "切換至鏡頭掃描...";
+            detectWebcam();
+        } else {
+            isWebcamMode = false;
+            video.style.display = 'none';
+            userImg.style.display = 'block';
+        }
+    }
+
+    // 3. 處理圖片上傳
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (f) => {
+            userImg.src = f.target.result;
+            switchMode('upload');
+            // 圖片加載完成後進行分析
+            userImg.onload = () => detectImage(userImg);
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // 4. 攝像頭啟動
+    async function startWebcam() {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => detectWebcam();
+    }
+
+    // 5. 實時檢測
+    async function detectWebcam() {
+        if (!isWebcamMode) return;
+        const predictions = await model.detect(video);
+        processResults(predictions, video);
+        requestAnimationFrame(detectWebcam);
+    }
+
+    // 6. 靜態圖片檢測
+    async function detectImage(imgElement) {
+        const predictions = await model.detect(imgElement);
+        processResults(predictions, imgElement);
+    }
+
+    // 7. 通用結果處理
+    function processResults(predictions, source) {
+        const ctx = canvas.getContext('2d');
+        canvas.width = source.clientWidth || source.videoWidth;
+        canvas.height = source.clientHeight || source.videoHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        let match = false;
+        predictions.forEach(p => {
+            if (hkSpecies[p.class]) {
+                match = true;
+                const species = hkSpecies[p.class];
+                
+                // 畫框
+                const [x, y, w, h] = p.bbox;
+                ctx.strokeStyle = "#00FF00";
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x, y, w, h);
+
+                // 更新文字
+                label.innerText = `識別結果：${species.zh}`;
+                guide.innerText = species.info;
+                reportBtn.style.display = 'block';
+            }
+        });
+
+        if (!match && !isWebcamMode) {
+            label.innerText = "未識別到指定物種";
+            guide.innerText = "請嘗試上傳更清晰、包含野豬、牛或鳥類的圖片。";
+            reportBtn.style.display = 'none';
+        }
+    }
+
+    function makeCall() {
+        if (confirm("是否立即接通漁農署/18222專線？")) {
+            window.location.href = "tel:18222";
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>
